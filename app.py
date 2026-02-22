@@ -54,7 +54,7 @@ if uploaded_file:
     progress_bar.progress(100)
 
     # Final result
-    prediction = "🟢 NO COUGH" if cough_count < 0 else "🔴 COUGH DETECTED"
+    prediction = "🔴 COUGH DETECTED" if cough_count > 0 else "🟢 NO COUGH"
 
     st.metric("Prediction", prediction)
     st.metric("Max Confidence", f"{max_prob*100:.1f}%")
