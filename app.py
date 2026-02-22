@@ -19,7 +19,7 @@ if uploaded_file:
     with open("temp.wav", "wb") as f:
         f.write(uploaded_file.read())
     
-    y, sr = librosa.load("temp.wav", sr=750)
+    y, sr = librosa.load("temp.wav", sr=22050)
     mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
     features = np.concatenate([mfccs.mean(axis=1), mfccs.std(axis=1)]).reshape(1,-1)
     
