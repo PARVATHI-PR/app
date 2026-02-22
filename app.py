@@ -16,11 +16,12 @@ if uploaded_file:
     with open("temp.wav", "wb") as f:
         f.write(uploaded_file.read())
 
-    # Load only first 30 seconds to avoid memory crash
-    y, sr = librosa.load("temp.wav", sr=22050, duration=30)
+    st.info("Loading audio...")
+    # Load at lower sample rate to save memory
+    y, sr = librosa.load("temp.wav", sr=16000)
 
-    # Split into 1-second chunks
-    chunk_size = sr  # 1 second
+    # 2-second chunks, stepping every 2 seconds (no overlap) = fewer chunks
+    chunk_size = sr * 2
     chunks = [y[i:i+chunk_size] for i in range(0, len(y), chunk_size)]
 
     model = pickle.load(open("model.pkl", "rb"))
@@ -29,24 +30,31 @@ if uploaded_file:
     max_prob = 0.0
     cough_times = []
 
-    with st.spinner("Analyzing audio..."):
-     for idx, chunk in enumerate(chunks):
-        if len(chunk) < chunk_size // 2:
-            continue  # skip very short chunks
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for idx, chunk in enumerate(chunks):
+        progress_bar.progress(int((idx + 1) / len(chunks) * 100))
+        status_text.text(f"Scanning segment {idx+1} of {len(chunks)}...")
+
+        if len(chunk) < sr:
+            continue
+
         mfccs = librosa.feature.mfcc(y=chunk, sr=sr, n_mfcc=13)
         features = np.concatenate([mfccs.mean(axis=1), mfccs.std(axis=1)]).reshape(1, -1)
         prob = model.predict_proba(features)[0][1]
+
         if prob > max_prob:
             max_prob = prob
         if prob > 0.5:
             cough_count += 1
-            cough_times.append(f"{idx}s - {idx+1}s (confidence: {prob*100:.1f}%)")
+            cough_times.append(f"{idx*2}s - {idx*2+2}s (confidence: {prob*100:.1f}%)")
+
+    status_text.text("✅ Analysis complete!")
+    progress_bar.progress(100)
 
     # Final result
-    if cough_count > 0:
-        prediction = "🔴 COUGH DETECTED"
-    else:
-        prediction = "🟢 NO COUGH"
+    prediction = "🟢 NO COUGH" if cough_count < 0 else "🔴 COUGH DETECTED"
 
     st.metric("Prediction", prediction)
     st.metric("Max Confidence", f"{max_prob*100:.1f}%")
@@ -57,11 +65,12 @@ if uploaded_file:
         for t in cough_times:
             st.write(f"• {t}")
 
-    # Spectrogram
+    # Spectrogram of first 30 seconds only
     fig, ax = plt.subplots()
-    D = librosa.amplitude_to_db(np.abs(librosa.stft(y)), ref=np.max)
+    y_short = y[:sr*30]
+    D = librosa.amplitude_to_db(np.abs(librosa.stft(y_short)), ref=np.max)
     librosa.display.specshow(D, sr=sr, x_axis="time", ax=ax)
-    ax.set_title("Spectrogram")
+    ax.set_title("Spectrogram (first 30 seconds)")
     st.pyplot(fig)
 
 st.markdown("---")
